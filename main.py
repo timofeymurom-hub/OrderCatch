@@ -184,13 +184,29 @@ async def perform_restart():
 # Связываем функцию перезапуска из веб-панели с нашей функцией
 web_app.restart_system = perform_restart
 
+async def self_keep_alive_loop():
+    """Фоновый авто-пингер для защиты от засыпания Render."""
+    await asyncio.sleep(60)
+    url = os.environ.get("RENDER_EXTERNAL_URL", "https://ordercatch.onrender.com")
+    import aiohttp
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as resp:
+                    logger.info(f"Self-ping к {url}: статус {resp.status}")
+        except Exception as e:
+            logger.debug(f"Self-ping error: {e}")
+        await asyncio.sleep(600)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # При старте FastAPI
     await init_db()
     await start_all()
+    pinger_task = asyncio.create_task(self_keep_alive_loop())
     yield
     # При остановке FastAPI
+    pinger_task.cancel()
     await stop_all()
 
 # Подключаем lifespan к FastAPI приложению
