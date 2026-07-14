@@ -37,9 +37,13 @@ async def init_db():
             )
         """)
         
-        # Миграция: добавим quiet_hours если таблица уже создана без колонки
+        # Миграция: добавим quiet_hours и premium_until если таблица уже создана
         try:
             await db.execute("ALTER TABLE users ADD COLUMN quiet_hours INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN premium_until TIMESTAMP")
         except Exception:
             pass
         
@@ -125,6 +129,7 @@ async def init_db():
 class Database:
     @staticmethod
     async def add_user(tg_id: int, username: str, referred_by: int = None) -> bool:
+        from datetime import datetime, timedelta
         ref_code = f"ref_{tg_id}"
         async with aiosqlite.connect(DB_FILE) as db:
             # Проверим, существует ли пользователь
@@ -154,18 +159,25 @@ class Database:
                             """, (referred_by,))
             
             admin_id = get_admin_id()
-            user_tier = 'premium' if admin_id and tg_id == admin_id else 'free'
-            max_filters = 99999 if admin_id and tg_id == admin_id else 3
+            if admin_id and tg_id == admin_id:
+                user_tier = 'premium'
+                max_filters = 99999
+                prem_until = None
+            else:
+                user_tier = 'premium' # Пробный Premium 3 дня всем новым
+                max_filters = 10
+                prem_until = (datetime.now() + timedelta(days=3)).isoformat()
 
             await db.execute("""
-                INSERT INTO users (tg_id, username, referred_by, referral_code, tier, max_filters) 
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (tg_id, username, referred_by, ref_code, user_tier, max_filters))
+                INSERT INTO users (tg_id, username, referred_by, referral_code, tier, max_filters, premium_until) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (tg_id, username, referred_by, ref_code, user_tier, max_filters, prem_until))
             await db.commit()
             return True
 
     @staticmethod
     async def get_user(tg_id: int) -> dict:
+        from datetime import datetime
         async with aiosqlite.connect(DB_FILE) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute("SELECT * FROM users WHERE tg_id = ?", (tg_id,)) as cursor:
@@ -176,6 +188,21 @@ class Database:
                     if admin_id and tg_id == admin_id:
                         u['tier'] = 'premium'
                         u['max_filters'] = 99999
+                        return u
+                    
+                    # Проверяем не истек ли пробный Premium
+                    prem_until = u.get('premium_until')
+                    if prem_until:
+                        try:
+                            until_dt = datetime.fromisoformat(prem_until)
+                            if datetime.now() > until_dt:
+                                u['tier'] = 'free'
+                                u['max_filters'] = 3
+                                u['premium_until'] = None
+                                await db.execute("UPDATE users SET tier = 'free', max_filters = 3, premium_until = NULL WHERE tg_id = ?", (tg_id,))
+                                await db.commit()
+                        except Exception:
+                            pass
                     return u
                 return None
 
