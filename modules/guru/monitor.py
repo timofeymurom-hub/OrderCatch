@@ -1,0 +1,103 @@
+import asyncio
+import hashlib
+import tls_requests
+from bs4 import BeautifulSoup
+import re
+from core.base_module import BaseModule
+from core.rate_limiter import ExponentialBackoff
+from database import Database
+
+class GuruMonitor(BaseModule):
+    def __init__(self, check_interval: float = 120.0):
+        super().__init__("guru")
+        self.check_interval = check_interval
+        self.backoff = ExponentialBackoff(base_delay=20.0, max_delay=300.0)
+
+    def _parse_category_sync(self, category_id: str):
+        if category_id.startswith('http'):
+            url = category_id
+        else:
+            url = f"https://www.guru.com/d/jobs/q/{category_id}/" if category_id and category_id != "0" else "https://www.guru.com/d/jobs/"
+
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
+        }
+        
+        try:
+            response = tls_requests.get(url, headers=headers, timeout=20)
+            html_text = response.text
+        except Exception:
+            import requests
+            r = requests.get(url, headers=headers, timeout=20)
+            r.raise_for_status()
+            html_text = r.text
+        
+        soup = BeautifulSoup(html_text, 'html.parser')
+        cards = soup.select('.jobRecord') or soup.select('div[class*="jobRecord"]') or soup.select('article')
+
+        listings = []
+        for idx, card in enumerate(cards):
+            title_el = card.select_one('.jobRecord__title') or card.select_one('h2') or card.select_one('a')
+            if not title_el:
+                continue
+                
+            title = title_el.get_text(strip=True)
+            href = title_el.get('href', '') if title_el.name == 'a' else (title_el.find('a')['href'] if title_el.find('a') else '')
+            if href and not href.startswith('http'):
+                href = f"https://www.guru.com{href}"
+            elif not href:
+                href = url
+                
+            match = re.search(r'/jobs/([a-zA-Z0-9_\-]+)/(\d+)', href) or re.search(r'/(\d+)', href)
+            job_id = match.group(2) if match and len(match.groups()) > 1 else (match.group(1) if match else hashlib.md5(f"{title}_{idx}".encode('utf-8')).hexdigest()[:12])
+            
+            price_el = card.select_one('.jobRecord__budget') or card.select_one('[class*="budget"]')
+            price_str = price_el.get_text(strip=True) if price_el else "Negotiable"
+            
+            try:
+                clean_price = re.sub(r'[^\d]', '', price_str)
+                usd_val = float(clean_price) if clean_price else 0.0
+                price_val = usd_val * 90.0
+            except Exception:
+                price_val = 0.0
+
+            listings.append({
+                'id': str(job_id),
+                'title': title,
+                'url': href,
+                'budget': price_str,
+                'budget_val': price_val,
+                'description': title,
+                'category_id': category_id,
+                'platform': 'guru'
+            })
+            
+        return listings
+
+    async def run(self):
+        while self.is_running:
+            categories = list(self.active_categories) if self.active_categories else ["0"]
+            self.logger.info(f"Начало проверки Guru.com. Категорий: {len(categories)}")
+            
+            success = False
+            for cat_id in categories:
+                try:
+                    listings = await asyncio.to_thread(self._parse_category_sync, cat_id)
+                    if listings:
+                        for listing in listings:
+                            if not await Database.is_listing_seen(self.name, listing['id']):
+                                await Database.add_seen_listing(self.name, listing['id'])
+                                await self.trigger_new_listing(listing)
+                    success = True
+                    await asyncio.sleep(3)
+                except Exception as e:
+                    self.logger.error(f"Ошибка проверки Guru.com: {e}")
+                    success = False
+
+            if success:
+                self.backoff.success()
+                await self.backoff.sleep(self.check_interval)
+            else:
+                await self.backoff.failure()

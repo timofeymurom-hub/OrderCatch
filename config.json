@@ -1,0 +1,60 @@
+{
+    "KWORK_COOKIE": "_ym_uid=1779982437112945961; _ym_d=1779982437; list_type_sdisplay=table; group_filters_key=6a18608a68d047.66319287; _kmid=dda8f4c9101fec4de9dedfc04b2a3bdd; _kmfvt=1779985109; uad=243510386a186ad592bb5143363079; userId=24351038; _kmwl=1; csrf_user_token=0ff4fbc7b7c9fa0a222c43e672c2cafe; RORSSQIHEK=acc49ae551a7a5f910f1a298b99c0d6e; slrememberme=24351038_%242y%2410%24iZbSRBh.6B0vRqjkwmQNP.lb1ZNFNNBYC8aNDE2950HJEMOXKZ9je; _ym_isad=1; _ym_visorc=w",
+    "TG_BOT_TOKEN": "8918758928:AAEx_H26alNJ-KGdcalU32IMZqNdzsinrpE",
+    "TG_CHAT_ID": "1054175856",
+    "CHECK_INTERVAL": 180,
+    "CATEGORY_URLS": [
+        [
+            "Разработка и IT: Скрипты, боты и mini apps",
+            "https://kwork.ru/projects?c=41"
+        ],
+        [
+            "Разработка и IT: Десктоп программирование",
+            "https://kwork.ru/projects?c=80"
+        ],
+        [
+            "Дизайн: Маркетплейсы и соцсети",
+            "https://kwork.ru/projects?c=286"
+        ],
+        [
+            "Тексты и переводы: Тексты и наполнение сайта",
+            "https://kwork.ru/projects?c=73"
+        ],
+        [
+            "Тексты и переводы: Продающие и бизнес-тексты",
+            "https://kwork.ru/projects?c=74"
+        ],
+        [
+            "Тексты и переводы: Переводы",
+            "https://kwork.ru/projects?c=35"
+        ],
+        [
+            "Тексты и переводы: Набор текста",
+            "https://kwork.ru/projects?c=75"
+        ],
+        [
+            "Тексты и переводы: Резюме и вакансии",
+            "https://kwork.ru/projects?c=235"
+        ],
+        [
+            "Тексты и переводы: ИИ-тексты",
+            "https://kwork.ru/projects?c=303"
+        ],
+        [
+            "Соцсети и маркетинг: Соцсети и SMM",
+            "https://kwork.ru/projects?c=46"
+        ],
+        [
+            "Соцсети и маркетинг: Маркетплейсы и доски объявлений",
+            "https://kwork.ru/projects?c=112"
+        ],
+        [
+            "Аудио, видео, съемка: ИИ-генерация видео",
+            "https://kwork.ru/projects?c=300"
+        ],
+        [
+            "Бизнес и жизнь: Персональный помощник",
+            "https://kwork.ru/projects?c=84"
+        ]
+    ]
+}
