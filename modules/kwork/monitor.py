@@ -1,6 +1,6 @@
 import asyncio
 import re
-import requests
+from tls_requests import requests
 from urllib.parse import urlparse, parse_qs
 from bs4 import BeautifulSoup
 from core.base_module import BaseModule
