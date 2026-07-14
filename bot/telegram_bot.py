@@ -115,7 +115,9 @@ async def command_start_handler(message: Message):
         f"При появлении подходящего лота я мгновенно пришлю его тебе!\n\n"
         f"👥 {html.bold('Реферальная программа:')} Пригласи 3 друзей по своей ссылке в разделе «👤 Профиль», и ты снимешь задержку на уведомления, а также увеличишь лимит фильтров до 10!"
     )
-    if referred_by and is_new:
+    if is_new:
+        welcome_text += "\n\n🎁 <b>Вам начислен пробный Premium-доступ на 3 дня!</b> Настраивайте любые фильтры и получайте мгновенные уведомления без задержки!"
+    elif referred_by:
         welcome_text += "\n\n🎉 Вы были зарегистрированы по приглашению друга!"
         
     await message.answer(welcome_text, reply_markup=get_main_keyboard(tg_id), parse_mode="HTML")
@@ -140,14 +142,24 @@ async def profile_handler(message: Message, bot: Bot):
     
     filters_limit_display = "♾️ Неограниченно" if user['max_filters'] >= 999 or user['tier'] == 'premium' else str(user['max_filters'])
     
+    trial_info = ""
+    prem_until = user.get('premium_until')
+    if prem_until:
+        try:
+            from datetime import datetime
+            until_dt = datetime.fromisoformat(prem_until)
+            trial_info = f"\n⏳ <b>Пробный Premium активен до:</b> {until_dt.strftime('%d.%m.%Y %H:%M')}"
+        except Exception:
+            pass
+
     profile_text = (
         f"<b>👤 Твой профиль:</b>\n\n"
         f"🆔 Telegram ID: <code>{user['tg_id']}</code>\n"
-        f"👑 Тариф: <b>{tier_names.get(user['tier'], user['tier'])}</b>\n"
+        f"👑 Тариф: <b>{tier_names.get(user['tier'], user['tier'])}</b>{trial_info}\n"
         f"👥 Приглашено друзей: <b>{user['referral_count']}</b>\n"
         f"📦 Лимит фильтров: <b>{filters_limit_display}</b>\n\n"
         f"🔗 <b>Твоя реферальная ссылка:</b>\n<code>{ref_link}</code>\n\n"
-        f"<i>Пригласи еще {max(0, 3 - user['referral_count'])} друзей, чтобы разблокировать мгновенные уведомления!</i>"
+        f"<i>Пригласи еще {max(0, 3 - user['referral_count'])} друзей, чтобы разблокировать вечный Реферальный Premium!</i>"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
