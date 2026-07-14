@@ -198,7 +198,7 @@ web_app.app.router.lifespan_context = lifespan
 
 if __name__ == "__main__":
     cfg = load_system_config()
-    port = int(cfg.get("WEB_PORT", 5000))
+    port = int(os.environ.get("PORT", cfg.get("WEB_PORT", 5000)))
     logger.info(f"Запуск FastAPI веб-сервера на порту {port}...")
     
     # Запускаем uvicorn
