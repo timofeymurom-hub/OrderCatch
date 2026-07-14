@@ -245,7 +245,13 @@ class Dispatcher:
         else:
             cat_display = f"<code>{category_name}</code>"
         
-        detected_time = item.get('published_at') or item.get('created_at') or datetime.now().strftime("%H:%M (МСК)")
+        try:
+            import pytz
+            now_msk = datetime.now(pytz.timezone('Europe/Moscow'))
+        except Exception:
+            now_msk = datetime.utcnow() + timedelta(hours=3)
+            
+        detected_time = now_msk.strftime("%H:%M (МСК)")
         
         text = (
             f"🏢 <b>Площадка:</b> {platform_name}\n"
