@@ -108,9 +108,8 @@ class FlMonitor(BaseModule):
                     listings = await asyncio.to_thread(self._parse_category_sync, cat_slug)
                     if listings:
                         for listing in listings:
-                            if not await Database.is_listing_seen(self.name, listing['id']):
-                                await Database.add_seen_listing(self.name, listing['id'])
-                                await self.trigger_new_listing(listing)
+                            await self.process_listing(cat_slug, listing)
+                        self.mark_category_seeded(cat_slug)
                     success = True
                     await asyncio.sleep(3)
                 except Exception as e:
