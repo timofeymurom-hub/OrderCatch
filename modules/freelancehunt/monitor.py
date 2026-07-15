@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import tls_requests
 from bs4 import BeautifulSoup
 import re
@@ -7,19 +6,20 @@ from core.base_module import BaseModule
 from core.rate_limiter import ExponentialBackoff
 from database import Database
 
-class FreelancehuntMonitor(BaseModule):
-    def __init__(self, check_interval: float = 90.0):
-        super().__init__("freelancehunt")
+class FreelanceRuMonitor(BaseModule):
+    def __init__(self, check_interval: float = 120.0):
+        super().__init__("freelance_ru")
         self.check_interval = check_interval
         self.backoff = ExponentialBackoff(base_delay=15.0, max_delay=300.0)
 
     def _parse_category_sync(self, category_id: str):
-        # Если категория - это полноценная ссылка, используем её
+        # Если это ссылка, используем её
         if category_id.startswith('http'):
             url = category_id
         else:
-            # Иначе подставляем как параметр категории
-            url = f"https://freelancehunt.com/projects?c={category_id}" if category_id else "https://freelancehunt.com/projects"
+            # Иначе подставляем как фильтр категорий в query-параметры
+            # На Freelance.ru используется параметр c[]
+            url = f"https://freelance.ru/task?c%5B%5D={category_id}" if category_id and category_id != "0" else "https://freelance.ru/task"
 
         headers = {
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
@@ -31,59 +31,44 @@ class FreelancehuntMonitor(BaseModule):
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
+        cards = soup.select('article.task-card')
         
-        # Поиск строк таблицы проектов
-        rows = soup.select('tr[data-project-id]')
-        if not rows:
-            rows = soup.select('.project-list > tr')
-        if not rows:
-            rows = soup.find_all(class_=re.compile(r'project-card|project-list-item'))
-            
         listings = []
-        for idx, row in enumerate(rows):
-            # Ссылка и название
-            title_el = row.select_one('a.visiting')
-            if not title_el:
-                title_el = row.find('a', href=re.compile(r'/project/.*\.html'))
-                
+        for idx, card in enumerate(cards):
+            title_el = card.select_one('a.task-card__title-link')
             if not title_el:
                 continue
                 
             title = title_el.get_text(strip=True)
             href = title_el.get('href', '')
             if href and not href.startswith('http'):
-                href = f"https://freelancehunt.com{href}"
+                href = f"https://freelance.ru{href}"
                 
-            # Идентификатор проекта из ссылки или data-project-id
-            project_id = row.get('data-project-id')
-            if not project_id:
-                match = re.search(r'/(\d+)\.html$', href)
-                project_id = match.group(1) if match else str(idx)
+            # Идентификатор
+            project_id = ""
+            match = re.search(r'/view/(\d+)', href)
+            if match:
+                project_id = match.group(1)
+            else:
+                project_id = str(hash(href))
                 
             # Бюджет
-            price_el = row.select_one('.price')
-            price_str = price_el.get_text(strip=True) if price_el else "Договорная"
+            price_el = card.select_one('.task-card__budget')
+            price_str = "Договорная"
+            price_val = 0.0
             
-            # Парсим число цены
-            try:
-                clean_price = re.sub(r'[^\d]', '', price_str)
-                price_val = float(clean_price) if clean_price else 0.0
-            except Exception:
-                price_val = 0.0
-                
-            # Конвертируем валюты для фильтрации в рубли
-            price_lower = price_str.lower()
-            if '₴' in price_lower or 'грн' in price_lower or 'uah' in price_lower:
-                price_val = price_val * 2.4 # 1 UAH -> 2.4 RUB
-            elif '$' in price_lower or 'usd' in price_lower:
-                price_val = price_val * 90.0
-            elif '€' in price_lower or 'eur' in price_lower:
-                price_val = price_val * 100.0
-                
+            if price_el:
+                price_str = price_el.get_text(strip=True)
+                if "Обсуждается" in price_str or "индивидуально" in price_str:
+                    price_str = "Договорная"
+                else:
+                    # Очищаем от валюты и пробелов
+                    clean_price = re.sub(r'[^\d]', '', price_str)
+                    if clean_price:
+                        price_val = float(clean_price)
+                        
             # Описание
-            desc_el = row.select_one('.description')
-            if not desc_el:
-                desc_el = row.select_one('p')
+            desc_el = card.select_one('.task-card__desc')
             description = desc_el.get_text(strip=True) if desc_el else "Без описания"
             description = re.sub(r'\s+', ' ', description).strip()
             
@@ -101,10 +86,9 @@ class FreelancehuntMonitor(BaseModule):
 
     async def run(self):
         while self.is_running:
-            # Если активных категорий нет, сканируем общую ленту проектов
             categories = list(self.active_categories) if self.active_categories else [""]
             
-            self.logger.info(f"Начало проверки Freelancehunt. Категорий/лент: {len(categories)}")
+            self.logger.info(f"Начало проверки Freelance.ru. Категорий/лент: {len(categories)}")
             
             success = False
             for cat_id in categories:
@@ -112,14 +96,12 @@ class FreelancehuntMonitor(BaseModule):
                     listings = await asyncio.to_thread(self._parse_category_sync, cat_id)
                     if listings:
                         for listing in listings:
-                            if not await Database.is_listing_seen(self.name, listing['id']):
-                                await Database.add_seen_listing(self.name, listing['id'])
-                                await self.trigger_new_listing(listing)
+                            await self.process_listing(cat_id, listing)
+                        self.mark_category_seeded(cat_id)
                     success = True
-                    # Задержка между запросами
                     await asyncio.sleep(3)
                 except Exception as e:
-                    self.logger.error(f"Ошибка проверки категории {cat_id} на Freelancehunt: {e}", exc_info=True)
+                    self.logger.error(f"Ошибка проверки категории {cat_id} на Freelance.ru: {e}", exc_info=True)
                     success = False
 
             if success:
