@@ -36,9 +36,9 @@ class Dispatcher:
         # Кэшируем лот для колбэков бота
         cache_key = f"{platform}_{listing['id']}"
         LISTING_CACHE[cache_key] = listing
-        # Ограничим размер кэша
-        if len(LISTING_CACHE) > 1000:
-            keys_to_del = list(LISTING_CACHE.keys())[:200]
+        # Ограничим размер кэша в памяти (максимум 150 лотов)
+        if len(LISTING_CACHE) > 150:
+            keys_to_del = list(LISTING_CACHE.keys())[:50]
             for k in keys_to_del:
                 LISTING_CACHE.pop(k, None)
 
