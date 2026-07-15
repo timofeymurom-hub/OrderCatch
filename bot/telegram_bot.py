@@ -24,7 +24,7 @@ class AdminStates(StatesGroup):
 
 def get_cancel_keyboard():
     keyboard = [[KeyboardButton(text="❌ Отмена")]]
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, is_persistent=True)
 
 def get_admin_id():
     if os.path.exists("config.json"):
@@ -48,7 +48,7 @@ def get_main_keyboard(user_id: int = None):
     admin_id = get_admin_id()
     if admin_id and user_id and str(user_id) == str(admin_id):
         keyboard.append([KeyboardButton(text="👑 Админ-панель")])
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, is_persistent=True)
 
 @router.message(F.text == "❌ Отмена")
 @router.message(Command("cancel"))
