@@ -198,15 +198,32 @@ async def self_keep_alive_loop():
             logger.debug(f"Self-ping error: {e}")
         await asyncio.sleep(600)
 
+async def memory_cleanup_loop():
+    """Фоновая очистка оперативной памяти и старых записей для поддержания RAM < 180 MB."""
+    import gc
+    from database import Database
+    await asyncio.sleep(120)
+    while True:
+        try:
+            collected = gc.collect()
+            logger.info(f"Сборщик мусора освободил объектов: {collected}")
+            await Database.clear_old_seen_listings(days=3)
+            Database.prune_seen_cache()
+        except Exception as e:
+            logger.error(f"Ошибка в memory_cleanup_loop: {e}")
+        await asyncio.sleep(300)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # При старте FastAPI
     await init_db()
     await start_all()
     pinger_task = asyncio.create_task(self_keep_alive_loop())
+    cleaner_task = asyncio.create_task(memory_cleanup_loop())
     yield
     # При остановке FastAPI
     pinger_task.cancel()
+    cleaner_task.cancel()
     await stop_all()
 
 # Подключаем lifespan к FastAPI приложению

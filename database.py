@@ -314,6 +314,8 @@ class Database:
     async def add_seen_listing(platform: str, listing_id: str) -> None:
         key = f"{platform}:{listing_id}"
         SEEN_CACHE.add(key)
+        if len(SEEN_CACHE) > 3000:
+            SEEN_CACHE.clear()
         async with aiosqlite.connect(DB_FILE) as db:
             await db.execute("""
                 INSERT OR IGNORE INTO seen_listings (platform, listing_id) 
@@ -322,12 +324,18 @@ class Database:
             await db.commit()
             
     @staticmethod
-    async def clear_old_seen_listings(days: int = 14) -> None:
+    def prune_seen_cache() -> None:
+        global SEEN_CACHE
+        SEEN_CACHE.clear()
+
+    @staticmethod
+    async def clear_old_seen_listings(days: int = 3) -> None:
         async with aiosqlite.connect(DB_FILE) as db:
             await db.execute("""
                 DELETE FROM seen_listings 
                 WHERE datetime(discovered_at) < datetime('now', ?)
             """, (f'-{days} days',))
+            await db.execute("PRAGMA shrink_memory;")
             await db.commit()
 
     @staticmethod
