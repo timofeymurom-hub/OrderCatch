@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
 import asyncio
-from database import Database
 
 class BaseModule(ABC):
     def __init__(self, name: str):
@@ -41,6 +40,7 @@ class BaseModule(ABC):
         При первичном сканировании категории после перезапуска бота,
         существующие старые лоты помечаются просмотренными БЕЗ отправки повторных уведомлений.
         """
+        from database import Database
         is_first_scan = (category_key not in self.seeded_categories)
         listing_id = str(listing['id'])
         
