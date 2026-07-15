@@ -100,9 +100,8 @@ class FunPayMonitor(BaseModule):
                     listings = await asyncio.to_thread(self._parse_category_sync, cat_id)
                     if listings:
                         for listing in listings:
-                            if not await Database.is_listing_seen(self.name, listing['id']):
-                                await Database.add_seen_listing(self.name, listing['id'])
-                                await self.trigger_new_listing(listing)
+                            await self.process_listing(cat_id, listing)
+                        self.mark_category_seeded(cat_id)
                     success = True
                     # Задержка между категориями, чтобы не спамить
                     await asyncio.sleep(3)
