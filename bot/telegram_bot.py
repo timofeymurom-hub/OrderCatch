@@ -1405,18 +1405,61 @@ async def add_bookmark_cb(callback: CallbackQuery):
     key = callback.data.replace("bm_add_", "")
     listing = LISTING_CACHE.get(key)
     
+    title = ""
+    url = ""
+    budget = "Договорная"
+    platform = "freelance"
+    category_name = ""
+
     if listing:
+        platform = listing.get('platform', 'unknown')
+        title = listing.get('title', 'Без названия')
+        url = listing.get('url', '')
+        budget = listing.get('budget', 'Договорная')
+        category_name = listing.get('category_id', '')
+    elif callback.message:
+        # Резервный парсинг данных заказа прямо из метаданных и текста сообщения
+        msg_text = callback.message.text or ""
+        
+        # Извлекаем ссылку из кнопки "🔗 Открыть заказ"
+        if callback.message.reply_markup and callback.message.reply_markup.inline_keyboard:
+            for row in callback.message.reply_markup.inline_keyboard:
+                for btn in row:
+                    if btn.url:
+                        url = btn.url
+                        break
+
+        # Извлекаем Заголовок
+        lines = [line.strip() for line in msg_text.split('\n') if line.strip()]
+        for line in lines:
+            if line.startswith("🔔"):
+                title = line.replace("🔔", "").strip()
+                break
+        if not title and lines:
+            title = lines[0]
+            
+        # Извлекаем Бюджет
+        for line in lines:
+            if "Бюджет" in line or "Цена" in line or "💰" in line:
+                budget = re.sub(r'^[💰\s]*Бюджет / Цена:\s*', '', line).strip()
+                break
+                
+        # Извлекаем платформу из ключа
+        if "_" in key:
+            platform = key.split("_")[0]
+
+    if title or url:
         await Database.add_bookmark(
             user_id=callback.from_user.id,
-            platform=listing.get('platform', 'unknown'),
-            title=listing.get('title', 'Без названия'),
-            url=listing.get('url', ''),
-            budget=listing.get('budget', 'Договорная'),
-            category_name=listing.get('category_id', '')
+            platform=platform,
+            title=title if title else "Заказ из мониторинга",
+            url=url,
+            budget=budget,
+            category_name=category_name
         )
-        await callback.answer("⭐ Сохранено в Избранное!", show_alert=True)
+        await callback.answer("⭐ Заказ успешно сохранен в Избранное!", show_alert=True)
     else:
-        await callback.answer("⭐ Заказ сохранен в список Избранного!", show_alert=True)
+        await callback.answer("⚠️ Не удалось сохранить заказ.", show_alert=True)
 
 @router.message(F.text == "⭐ Избранное")
 async def show_bookmarks_handler(message: Message):
