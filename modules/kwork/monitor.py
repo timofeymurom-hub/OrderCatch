@@ -171,10 +171,8 @@ class KworkMonitor(BaseModule):
                     orders = await asyncio.to_thread(self._parse_category_sync, cat_id)
                     if orders:
                         for order in orders:
-                            # Проверяем, видели ли уже этот заказ
-                            if not await Database.is_listing_seen(self.name, order['id']):
-                                await Database.add_seen_listing(self.name, order['id'])
-                                await self.trigger_new_listing(order)
+                            await self.process_listing(cat_id, order)
+                        self.mark_category_seeded(cat_id)
                     success = True
                 except Exception as e:
                     self.logger.error(f"Ошибка проверки категории {cat_id} на Kwork: {e}", exc_info=True)
