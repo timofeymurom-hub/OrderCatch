@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
 import logging
 import asyncio
+from database import Database
 
 class BaseModule(ABC):
     def __init__(self, name: str):
         self.name = name
         self.callbacks = []
         self.active_categories = set()
+        self.seeded_categories = set()
         self.is_running = False
         self.logger = logging.getLogger(f"module.{name}")
         
@@ -30,7 +32,25 @@ class BaseModule(ABC):
         old_cats = self.active_categories.copy()
         self.active_categories = set(categories)
         if old_cats != self.active_categories:
+            self.seeded_categories = self.seeded_categories.intersection(self.active_categories)
             self.logger.info(f"Список категорий обновлен: {self.active_categories}")
+
+    async def process_listing(self, category_key: str, listing: dict):
+        """
+        Проверка и обработка лота.
+        При первичном сканировании категории после перезапуска бота,
+        существующие старые лоты помечаются просмотренными БЕЗ отправки повторных уведомлений.
+        """
+        is_first_scan = (category_key not in self.seeded_categories)
+        listing_id = str(listing['id'])
+        
+        if not await Database.is_listing_seen(self.name, listing_id):
+            await Database.add_seen_listing(self.name, listing_id)
+            if not is_first_scan:
+                await self.trigger_new_listing(listing)
+
+    def mark_category_seeded(self, category_key: str):
+        self.seeded_categories.add(category_key)
 
     @abstractmethod
     async def run(self):
